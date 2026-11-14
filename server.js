@@ -1,4 +1,6 @@
-console.log('REY STARTING');const http = require('http');
+// Force Node 20
+// @ts-ignore
+if (typeof fetch === 'undefined') { console.log('NO FETCH'); }console.log('REY STARTING');const http = require('http');
 const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
