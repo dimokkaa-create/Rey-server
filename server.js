@@ -1,4 +1,4 @@
-const http = require('http');
+console.log('REY STARTING');const http = require('http');
 const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
