@@ -4,10 +4,9 @@ const crypto = require('crypto');
 const PORT = process.env.PORT || 3000;
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const CHAT_ID = process.env.CHAT_ID || '';
-const PANEL_PASS = '1234'; // твой пароль для входа
+const PANEL_PASS = '1234';
 
 const links = new Map();
-
 const uid = () => crypto.randomBytes(4).toString('hex');
 const esc = s => String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -19,11 +18,6 @@ async function notify(text) {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': data.length }
     });
     req.write(data); req.end();
-}
-
-function auth(req) {
-    const cookie = req.headers.cookie || '';
-    return cookie.includes('rey_auth=ok');
 }
 
 const server = http.createServer((req, res) => {
@@ -43,14 +37,18 @@ const server = http.createServer((req, res) => {
         let b=''; req.on('data',c=>b+=c); req.on('end',()=>{
             let d={}; try{d=JSON.parse(b)}catch(e){}
             const id = u.slice(5);
-            if(links.has(id)) links.get(id).hits.push({...d, ip: req.headers['x-forwarded-for']||req.socket.remoteAddress, time: new Date().toLocaleString('ru-RU')});
-            notify(`Визит!\nIP: ${req.headers['x-forwarded-for']||req.socket.remoteAddress}\nUA: ${d.ua||'?'}`);
+            const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+            if(links.has(id)) links.get(id).hits.push({...d, ip, time: new Date().toLocaleString('ru-RU')});
+            notify(`Визит!\nIP: ${ip}\nUA: ${d.ua||'?'}`);
             res.end('{"ok":true}');
         }); return;
     }
 
-    if (!auth(req) && !u.startsWith('/l/')) {
-        if (u === '/login') { res.writeHead(200, {'Content-Type':'text/html'}); return res.end(`<body style="background:#0a0a0f;color:#fff;text-align:center;padding:50px;font-family:sans-serif"><h2>Вход</h2><input id="p" type="password" style="padding:10px"><button onclick="fetch('/api/login',{method:'POST',body:JSON.stringify({pass:document.getElementById('p').value})}).then(r=>{if(r.ok)location.href='/'})">Войти</button></body>`); }
+    if (!(req.headers.cookie || '').includes('rey_auth=ok') && !u.startsWith('/l/')) {
+        if (u === '/login') { 
+            res.writeHead(200, {'Content-Type':'text/html'}); 
+            return res.end(`<body style="background:#0a0a0f;color:#fff;text-align:center;padding:50px;font-family:sans-serif"><h2>Вход</h2><input id="p" type="password" style="padding:10px"><button onclick="fetch('/api/login',{method:'POST',body:JSON.stringify({pass:document.getElementById('p').value})}).then(r=>{if(r.ok)location.href='/'})">Войти</button></body>`); 
+        }
         res.writeHead(302, {'Location':'/login'}); return res.end();
     }
 
@@ -60,17 +58,33 @@ const server = http.createServer((req, res) => {
         <style>body{background:#0a0a0f;color:#fff;font-family:sans-serif;padding:20px;max-width:600px;margin:auto}
         input{width:100%;padding:10px;margin:5px 0;background:#111;border:1px solid #333;color:#fff;box-sizing:border-box}
         button{padding:10px 20px;background:#7c5cff;color:#fff;border:none;border-radius:5px;margin-top:10px;width:100%}
-        .card{background:#111;padding:15px;border-radius:10px;margin-bottom:15px}
-        .link-item{background:#000;padding:10px;margin:10px 0;border-radius:5px;font-size:14px}</style></head><body>
+        .card{background:#111;padding:15px;border-radius:10px;margin-bottom:15px}</style></head><body>
         <h2>Панель</h2>
-        <div class="card"><input id="t" placeholder="Заголовок" value="Привет"><input id="b" placeholder="Кнопка" value="Открыть"><button onclick="create()">Создать ссылку</button></div>
+        <div class="card">
+            <input id="t" placeholder="Заголовок" value="Привет">
+            <input id="b" placeholder="Кнопка" value="Открыть">
+            <button onclick="create()">Создать ссылку</button>
+        </div>
         <div id="list"></div>
         <script>
-        async function create(){await fetch('/api/links',{method:'POST',body:JSON.stringify({title:document.getElementById('t').value,btn:document.getElementById('b').value})});load()}
-        async function load(){const r=await fetch('/api/links');const links=await r.json();document.getElementById('list').innerHTML=links.map(l=>{
-            const url=location.origin+'/l/'+l.id;
-            return '<div class="card"><b>'+l.title+'</b><br><a href="'+url+'" style="color:#00d9a3" target="_blank">'+url+'</a><br><button onclick="navigator.clipboard.writeText(\''+url+'\')">Копировать</button><div style="margin-top:10px;font-size:12px;color:#888">Визитов: '+l.hits.length+'</div></div>'
-        }).join('')}
+        async function create(){
+            const t = document.getElementById('t').value;
+            const b = document.getElementById('b').value;
+            const r = await fetch('/api/links', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({title: t, btn: b})
+            });
+            if(r.ok) { location.reload(); } else { alert('Не вышло'); }
+        }
+        async function load(){
+            const r = await fetch('/api/links');
+            const links = await r.json();
+            document.getElementById('list').innerHTML = links.map(l=>{
+                const url = location.origin + '/l/' + l.id;
+                return '<div class="card"><b>'+l.title+'</b><br><a href="'+url+'" style="color:#00d9a3" target="_blank">'+url+'</a><br><button onclick="navigator.clipboard.writeText(\''+url+'\')">Скопировать</button><div style="margin-top:10px;font-size:12px;color:#888">Визитов: '+l.hits.length+'</div></div>'
+            }).join('');
+        }
         load();
         </script></body></html>`);
     }
@@ -89,13 +103,15 @@ const server = http.createServer((req, res) => {
     if (u === '/api/links' && req.method === 'POST') {
         let b=''; req.on('data',c=>b+=c); req.on('end',()=>{
             let d={}; try{d=JSON.parse(b)}catch(e){}
-            const id = uid(); links.set(id, {id, title:d.title||'Ссылка', btn:d.btn||'Открыть', hits:[]});
-            res.writeHead(200,{'Content-Type':'application/json'}); res.end('{"ok":true}');
+            const id = uid(); 
+            links.set(id, {id, title: d.title || 'Ссылка', btn: d.btn || 'Открыть', hits: []});
+            res.writeHead(200, {'Content-Type':'application/json'}); 
+            res.end('{"ok":true}');
         }); return;
     }
 
     if (u === '/api/links' && req.method === 'GET') {
-        res.writeHead(200,{'Content-Type':'application/json'});
+        res.writeHead(200, {'Content-Type':'application/json'});
         return res.end(JSON.stringify([...links.values()]));
     }
 
